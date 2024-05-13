@@ -23,6 +23,7 @@ import android.os.Bundle;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 
 import androidx.camera.lifecycle.ProcessCameraProvider;
@@ -142,7 +143,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void analyze(@NonNull ImageProxy imageProxy) {
                 int rotationDegrees = imageProxy.getImageInfo().getRotationDegrees();
-                ByteBuffer byteBuffer = imageProxy.getImage().getPlanes()[0].getBuffer();
+                ByteBuffer byteBuffer = Objects.requireNonNull(imageProxy.getImage()).getPlanes()[0].getBuffer();
                 byteBuffer.rewind();
                 Bitmap bitmap = Bitmap.createBitmap(imageProxy.getWidth(), imageProxy.getHeight(), Bitmap.Config.ARGB_8888);
                 bitmap.copyPixelsFromBuffer(byteBuffer);
@@ -166,17 +167,37 @@ public class MainActivity extends AppCompatActivity {
                     dotPaint.setStyle(Paint.Style.FILL); // Filled circle for landmark points
 
                     PoseLandmark[] poseLandmarks = poseArrayList.get(0).getAllPoseLandmarks().toArray(new PoseLandmark[0]);
-                    for (int i = 0; i < poseLandmarks.length; i++) {
-                        PoseLandmark landmark = poseLandmarks[i];
+
+                    for (PoseLandmark landmark : poseLandmarks) {
                         float landmarkX = landmark.getPosition().x;
                         float landmarkY = landmark.getPosition().y;
                         canvas.drawCircle(landmarkX, landmarkY, 4, dotPaint); // Slimmer dots for landmarks
+                    }
 
-                        if (i == 11 && i + 1 < poseLandmarks.length) {
-                            PoseLandmark nextLandmark = poseLandmarks[i + 1];
-                            canvas.drawLine(landmarkX, landmarkY, nextLandmark.getPosition().x, nextLandmark.getPosition().y, linePaint);
+                    // Define the landmark pairs that need lines drawn between them
+                    int[][] landmarkPairs = {
+                            {11, 12}, {12, 14}, {14, 16}, {16, 18}, {18, 20}, {16, 20}, {16, 22},
+                            {12, 24}, {11, 23}, {24, 23}, {11, 13}, {13, 15}, {15, 17}, {17, 19},
+                            {15, 19}, {15, 21}, {6, 5}, {5, 4}, {1, 2}, {2, 3}, {0, 4}, {0, 1},
+                            {6, 8}, {3, 7}, {9, 10}, {24, 23}, {24, 26}, {26, 28}, {23, 25},
+                            {25, 27},{28, 30}, {28, 32}, {30, 32}, {27, 29}, {27, 31}, {29,31}
+                    };
+
+// Iterate over landmark pairs and draw lines
+                    for (int[] pair : landmarkPairs) {
+                        int index1 = pair[0];
+                        int index2 = pair[1];
+                        if (index1 >= 0 && index1 < poseLandmarks.length && index2 >= 0 && index2 < poseLandmarks.length) {
+                            PoseLandmark landmark1 = poseLandmarks[index1];
+                            PoseLandmark landmark2 = poseLandmarks[index2];
+                            canvas.drawLine(
+                                    landmark1.getPosition().x, landmark1.getPosition().y,
+                                    landmark2.getPosition().x, landmark2.getPosition().y,
+                                    linePaint
+                            );
                         }
                     }
+
 
                     bitmap4DisplayArrayList.clear();
                     bitmap4DisplayArrayList.add(bitmapArrayList.get(0));
@@ -187,7 +208,8 @@ public class MainActivity extends AppCompatActivity {
                     isRunning = false;
                 }
 
-                if (poseArrayList.size() == 0 && bitmapArrayList.size() >= 1 && !isRunning) {
+                poseArrayList.size();
+                if (bitmapArrayList.size() >= 1 && !isRunning) {
                     RunMlkit.run();
                     isRunning = true;
                 }
@@ -198,9 +220,6 @@ public class MainActivity extends AppCompatActivity {
 
                 imageProxy.close();
             }
-
-
-
         });
 
         Camera camera = cameraProvider.bindToLifecycle((LifecycleOwner)this, cameraSelector, imageAnalysis, preview);
@@ -225,7 +244,7 @@ public class MainActivity extends AppCompatActivity {
 
     private boolean allPermissionsGranted() {
         for (String permission : getRequiredPermissions()) {
-            if (!isPermissionGranted(this, permission)) {
+            if (isPermissionGranted(this, permission)) {
                 return false;
             }
         }
@@ -233,17 +252,13 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private static boolean isPermissionGranted(Context context, String permission) {
-        if (ContextCompat.checkSelfPermission(context, permission)
-                == PackageManager.PERMISSION_GRANTED) {
-            return true;
-        }
-        return false;
+        return ContextCompat.checkSelfPermission(context, permission) != PackageManager.PERMISSION_GRANTED;
     }
 
     private void getRuntimePermissions() {
         List<String> allNeededPermissions = new ArrayList<>();
         for (String permission : getRequiredPermissions()) {
-            if (!isPermissionGranted(this, permission)) {
+            if (isPermissionGranted(this, permission)) {
                 allNeededPermissions.add(permission);
             }
         }
